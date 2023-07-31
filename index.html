@@ -34,6 +34,7 @@
                         rows="5" 
                         placeholder="Enter Mastodon or Pixelfed format blocklist here"
                         v-model="query"></textarea>
+                    <p v-if="queryFormat" class="small fw-light text-success">{{ queryFormat }} detected</p>
                 </div>
                 <div class="flex-grow-1">
                     <textarea class="form-control" rows="5" v-model="result"></textarea>
@@ -43,6 +44,10 @@
                 <button type="button" class="btn btn-primary btn-lg px-4 gap-3" @click.prevent="submitForm()">Convert</button>
                 <button type="button" class="btn btn-outline-secondary btn-lg px-4" @click.prevent="clearForm()">Clear</button>
             </div>
+
+            <p class="text-center mt-4 small">
+                <a href="https://github.com/dansup/masto2pixel/">source</a> - conversion and permalinks are done in-browser, nothing is sent to a server - made for the <a href="https://fediverse.info">fediverse</a> 
+            </p>
         </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js" integrity="sha384-HwwvtgBNo3bZJJLYd8oVXjrBZt8cqVSpeBNS5n7C8IVInixGAoxmnlMuBnhbgrkm" crossorigin="anonymous"></script>
@@ -70,6 +75,16 @@
                 let decoded = atob(u.get('f'))
                 this.query = decoded;
                 this.submitForm();
+            }
+        },
+
+        computed: {
+            queryFormat: {
+                get() {
+                    return this.query && this.query.length ? 
+                    ( this.query.startsWith('{') ? 'pixelfed' : 'mastodon' ) :
+                    null
+                }
             }
         },
 
