@@ -89,7 +89,7 @@
 	    	clearForm() {
 	    		this.result = undefined;
 	    		this.query = undefined;
-				window.history.pushState(null, null, '/');
+				window.history.pushState(null, null, '/masto2pixel/');
 	    	},
 
 	    	formatToMastodon() {
@@ -102,7 +102,7 @@
 	    			res += i + ",suspend," + rejectMedia + "," + rejectReports + ",blocked," + obf + "\n";
 	    		})
 	    		this.result = res;
-				window.history.pushState(null, null, '/?f=' + btoa(this.result));
+				window.history.pushState(null, null, '/masto2pixel/?f=' + btoa(this.result));
 	    	},
 
 			async generateSHA256(jsonString) {
@@ -136,7 +136,7 @@
 				.then(sha256Digest => {
 					res['_sha256'] = sha256Digest
 					this.result = JSON.stringify(res, null, 4);
-					window.history.pushState(null, null, '/?f=' + btoa(this.result));
+					window.history.pushState(null, null, '/masto2pixel/?f=' + btoa(this.result));
 				})
 				.catch(error => console.error(error));
 	    	}
