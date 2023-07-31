@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>mastodon to pixelfed blocklist converter</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-4bw+/aepP/YC94hEpVNVgiZdgIC5+VKNBQNGCHeKRQN+PtmoHDEXuppvnDJzQIu9" crossorigin="anonymous">
+  </head>
+  <body>
+	<div id="app" class="px-4 py-5 my-5 text-center">
+		<h1 class="display-5 fw-bold text-body-emphasis">masto2pixel blocklist converter</h1>
+		<div class="col-lg-6 mx-auto">
+			<p class="lead mb-4">Quickly convert blocklist formats between Mastodon and Pixelfed.</p>
+			<div class="d-flex gap-3 justify-content-around">
+				<div class="form-check form-switch">
+					<input class="form-check-input" type="checkbox" role="switch" id="obfuscate" v-model="obfuscate">
+					<label class="form-check-label" for="obfuscate">Obfuscate</label>
+				</div>
+
+				<div class="form-check form-switch">
+					<input class="form-check-input" type="checkbox" role="switch" id="rejectReports" v-model="rejectReports">
+					<label class="form-check-label" for="rejectReports">Reject Reports</label>
+				</div>
+
+				<div class="form-check form-switch">
+					<input class="form-check-input" type="checkbox" role="switch" id="rejectMedia" v-model="rejectMedia">
+					<label class="form-check-label" for="rejectMedia">Reject Media</label>
+				</div>
+			</div>
+			<div class="gap-2 d-flex py-3 justify-content-center">
+				<div class="flex-grow-1">
+					<textarea 
+						class="form-control" 
+						rows="5" 
+						placeholder="Enter Mastodon or Pixelfed format blocklist here"
+						v-model="query"></textarea>
+				</div>
+				<div class="flex-grow-1">
+					<textarea class="form-control" rows="5" v-model="result"></textarea>
+				</div>
+			</div>
+			<div class="d-grid gap-2 d-sm-flex justify-content-sm-center">
+				<button type="button" class="btn btn-primary btn-lg px-4 gap-3" @click.prevent="submitForm()">Convert</button>
+				<button type="button" class="btn btn-outline-secondary btn-lg px-4" @click.prevent="clearForm()">Clear</button>
+			</div>
+		</div>
+	</div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js" integrity="sha384-HwwvtgBNo3bZJJLYd8oVXjrBZt8cqVSpeBNS5n7C8IVInixGAoxmnlMuBnhbgrkm" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+    <script>
+	  const { createApp } = Vue
+
+	  createApp({
+	    data() {
+	      return {
+	       	query: undefined,
+	       	result: undefined,
+	       	obfuscate: true,
+	       	rejectMedia: true,
+	       	rejectReports: true,
+	       	blocked: [],
+	       	hidden: []
+	      }
+	    },
+
+	    mounted() {
+	    	let u = new URLSearchParams(window.location.search);
+	    	if(u.has('f')) {
+	    		let decoded = atob(u.get('f'))
+	    		this.query = decoded;
+	    		this.submitForm();
+	    	}
+	    },
+
+	    methods: {
+	    	submitForm() {
+	    		if(!this.query || !this.query.length) {
+	    			return;
+	    		}
+	    		// json (pixel)
+	    		if(this.query.startsWith('{')) {
+					this.formatToMastodon();
+	    		} else {
+					this.formatToPixelfed();
+	    		}
+	    	},
+
+	    	clearForm() {
+	    		this.result = undefined;
+	    		this.query = undefined;
+				window.history.pushState(null, null, '/');
+	    	},
+
+	    	formatToMastodon() {
+	    		let d = JSON.parse(this.query);
+	    		let res = "#domain,#severity,#reject_media,#reject_reports,#public_comment,#obfuscate\n";
+	    		d.banned.forEach(i => {
+	    			let obf = this.obfuscate ? "true" : "false";
+	    			let rejectMedia = this.rejectMedia ? "true" : "false";
+	    			let rejectReports = this.rejectReports ? "true" : "false";
+	    			res += i + ",suspend," + rejectMedia + "," + rejectReports + ",blocked," + obf + "\n";
+	    		})
+	    		this.result = res;
+				window.history.pushState(null, null, '/?f=' + btoa(this.result));
+	    	},
+
+			async generateSHA256(jsonString) {
+				const encoder = new TextEncoder();
+				const data = encoder.encode(jsonString);
+				const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+				const hashArray = Array.from(new Uint8Array(hashBuffer));
+				const hashHex = hashArray.map(byte => byte.toString(16).padStart(2, '0')).join('');
+				return hashHex;
+			},
+
+	    	formatToPixelfed() {
+	    		var csv = Papa.parse(this.query);
+	    		csv.data.filter(i => !i[0].startsWith('#')).forEach(i => {
+	    			if(i[1] == 'suspend') {
+	    				this.blocked.push(i[0])
+	    			} else if (i[1] == 'silence') {
+	    				this.hidden.push(i[0]);
+	    			}
+	    		})
+	    		const currentDate = new Date();
+				const timestamp = currentDate.toISOString().replace('Z', '+00:00');
+	    		let res = {
+				    "version": 1,
+				    "auto_cw": this.hidden,
+				    "unlisted": this.hidden,
+				    "banned": this.blocked,
+				    "created_at": timestamp,
+				}
+				this.generateSHA256(res)
+				.then(sha256Digest => {
+					res['_sha256'] = sha256Digest
+					this.result = JSON.stringify(res, null, 4);
+					window.history.pushState(null, null, '/?f=' + btoa(this.result));
+				})
+				.catch(error => console.error(error));
+	    	}
+	    }
+	  }).mount('#app')
+	</script>
+  </body>
+</html>
